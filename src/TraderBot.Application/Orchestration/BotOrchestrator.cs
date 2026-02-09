@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TraderBot.Application.Ports;
 using TraderBot.Application.Strategies;
@@ -16,8 +17,7 @@ public class BotOrchestrator
     private readonly ILogger<BotOrchestrator> _logger;
     private readonly BotSettings _settings;
     private readonly IMarketDataFeed _marketDataFeed;
-    private readonly IMarketDataStore _marketDataStore;
-    private readonly MartingaleStrategy _strategy;
+    private readonly IServiceScopeFactory _serviceScopeFactory;
     
     private BotStatus _status = BotStatus.Stopped;
 
@@ -25,14 +25,12 @@ public class BotOrchestrator
         ILogger<BotOrchestrator> logger,
         BotSettings settings,
         IMarketDataFeed marketDataFeed,
-        IMarketDataStore marketDataStore,
-        MartingaleStrategy strategy)
+        IServiceScopeFactory serviceScopeFactory)
     {
         _logger = logger;
         _settings = settings;
         _marketDataFeed = marketDataFeed;
-        _marketDataStore = marketDataStore;
-        _strategy = strategy;
+        _serviceScopeFactory = serviceScopeFactory;
     }
 
     public BotStatus Status => _status;
@@ -118,6 +116,11 @@ public class BotOrchestrator
                 _logger.LogInformation("Received candle: {Symbol} @ {Timestamp}, Close: {Close}", 
                     e.Symbol, e.Timestamp, e.Close);
 
+                // Create a scope for scoped services
+                using var scope = _serviceScopeFactory.CreateScope();
+                var marketDataStore = scope.ServiceProvider.GetRequiredService<IMarketDataStore>();
+                var strategy = scope.ServiceProvider.GetRequiredService<MartingaleStrategy>();
+
                 // Store candle in database
                 var candle = new Candle
                 {
@@ -131,10 +134,10 @@ public class BotOrchestrator
                     TimeFrame = _settings.TimeFrame.ToString()
                 };
 
-                await _marketDataStore.SaveCandleAsync(candle);
+                await marketDataStore.SaveCandleAsync(candle);
 
                 // Execute strategy
-                await _strategy.OnCandleAsync(candle);
+                await strategy.OnCandleAsync(candle);
             }
             catch (Exception ex)
             {
