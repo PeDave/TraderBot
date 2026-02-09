@@ -31,7 +31,7 @@ public class WalletController : ControllerBase
             {
                 Asset = b.Key,
                 Available = b.Value,
-                Locked = 0m // TODO: Get locked balance separately
+                Locked = 0m // TODO: Implement locked balance retrieval from exchange
             }).ToList();
 
             return Ok(dtos);

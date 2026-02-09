@@ -105,35 +105,41 @@ public class BotOrchestrator
 
     /// <summary>
     /// Event handler for when a new candle is received
+    /// Queues work asynchronously to avoid blocking the event source
     /// </summary>
-    private async void OnCandleReceived(object? sender, CandleReceivedEventArgs e)
+    private void OnCandleReceived(object? sender, CandleReceivedEventArgs e)
     {
-        try
+        // Queue work to avoid blocking the event source
+        // Using fire-and-forget pattern with proper exception handling
+        _ = Task.Run(async () =>
         {
-            _logger.LogInformation("Received candle: {Symbol} @ {Timestamp}, Close: {Close}", 
-                e.Symbol, e.Timestamp, e.Close);
-
-            // Store candle in database
-            var candle = new Candle
+            try
             {
-                Symbol = e.Symbol,
-                Timestamp = e.Timestamp,
-                Open = e.Open,
-                High = e.High,
-                Low = e.Low,
-                Close = e.Close,
-                Volume = e.Volume,
-                TimeFrame = _settings.TimeFrame.ToString()
-            };
+                _logger.LogInformation("Received candle: {Symbol} @ {Timestamp}, Close: {Close}", 
+                    e.Symbol, e.Timestamp, e.Close);
 
-            await _marketDataStore.SaveCandleAsync(candle);
+                // Store candle in database
+                var candle = new Candle
+                {
+                    Symbol = e.Symbol,
+                    Timestamp = e.Timestamp,
+                    Open = e.Open,
+                    High = e.High,
+                    Low = e.Low,
+                    Close = e.Close,
+                    Volume = e.Volume,
+                    TimeFrame = _settings.TimeFrame.ToString()
+                };
 
-            // Execute strategy
-            await _strategy.OnCandleAsync(candle);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing candle");
-        }
+                await _marketDataStore.SaveCandleAsync(candle);
+
+                // Execute strategy
+                await _strategy.OnCandleAsync(candle);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing candle");
+            }
+        });
     }
 }

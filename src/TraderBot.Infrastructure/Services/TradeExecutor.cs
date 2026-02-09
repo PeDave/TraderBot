@@ -59,9 +59,7 @@ public class TradeExecutor : ITradeExecutor
         _logger.LogInformation("Cancelling order: {OrderId}", orderId);
         
         // TODO: Implement order cancellation through exchange client
-        await Task.Delay(100, cancellationToken);
-        
-        _logger.LogWarning("Order cancellation not implemented");
-        return false;
+        // This functionality requires exchange integration
+        throw new NotImplementedException("Order cancellation not yet implemented. Requires exchange client integration.");
     }
 }
