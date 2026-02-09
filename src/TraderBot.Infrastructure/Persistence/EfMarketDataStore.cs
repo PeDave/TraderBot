@@ -15,14 +15,17 @@ public class EfMarketDataStore : IMarketDataStore
 
     public async Task SaveCandleAsync(Candle candle, CancellationToken cancellationToken = default)
     {
-        // Check if candle already exists (avoid duplicates)
-        var exists = await _context.Candles
-            .AnyAsync(c => c.Symbol == candle.Symbol && c.Timestamp == candle.Timestamp, cancellationToken);
-
-        if (!exists)
+        try
         {
+            // Try to add the candle
             _context.Candles.Add(candle);
             await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UNIQUE constraint failed") == true)
+        {
+            // Ignore duplicate candle (it already exists in the database)
+            // This is expected behavior for real-time candle updates
+            _context.Entry(candle).State = EntityState.Detached;
         }
     }
 

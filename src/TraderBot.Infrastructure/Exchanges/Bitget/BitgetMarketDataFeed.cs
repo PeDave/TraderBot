@@ -84,7 +84,10 @@ public class BitgetMarketDataFeed : IMarketDataFeed
             }
             else
             {
-                _logger.LogError("Failed to subscribe to Spot kline updates: {Error}", spotResult.Error?.Message);
+                _logger.LogError("Failed to subscribe to Spot kline updates. Success: {Success}, Error: {Error}, ErrorCode: {ErrorCode}", 
+                    spotResult.Success, 
+                    spotResult.Error?.Message ?? "null", 
+                    spotResult.Error?.Code ?? 0);
             }
 
             // Subscribe to Futures klines for BTCUSDT_UMCBL
@@ -123,7 +126,10 @@ public class BitgetMarketDataFeed : IMarketDataFeed
             }
             else
             {
-                _logger.LogError("Failed to subscribe to Futures kline updates: {Error}", futuresResult.Error?.Message);
+                _logger.LogError("Failed to subscribe to Futures kline updates. Success: {Success}, Error: {Error}, ErrorCode: {ErrorCode}", 
+                    futuresResult.Success, 
+                    futuresResult.Error?.Message ?? "null", 
+                    futuresResult.Error?.Code ?? 0);
             }
 
             _isRunning = true;
