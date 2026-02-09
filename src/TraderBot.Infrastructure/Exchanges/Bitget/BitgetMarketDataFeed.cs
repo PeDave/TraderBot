@@ -1,3 +1,8 @@
+using Bitget.Net.Clients;
+using Bitget.Net.Enums;
+using Bitget.Net.Enums.V2;
+using CryptoExchange.Net.Objects.Sockets;
+using CryptoExchange.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using TraderBot.Domain.Abstractions;
 using TraderBot.Domain.Enums;
@@ -6,19 +11,15 @@ using TraderBot.Domain.Settings;
 namespace TraderBot.Infrastructure.Exchanges.Bitget;
 
 /// <summary>
-/// Bitget market data feed using WebSocket
-/// 
-/// TODO: Implement actual Bitget.Net WebSocket integration
-/// This is a skeleton implementation with placeholders for:
-/// - WebSocket subscription to kline/candlestick data
-/// - Real-time data parsing and event firing
-/// 
-/// Required NuGet package: Bitget.Net (when available/stable)
+/// Bitget market data feed using WebSocket with real Bitget.Net integration
 /// </summary>
 public class BitgetMarketDataFeed : IMarketDataFeed
 {
     private readonly ILogger<BitgetMarketDataFeed> _logger;
     private readonly ExchangeSettings _settings;
+    private readonly BitgetSocketClient _socketClient;
+    private UpdateSubscription? _spotSubscription;
+    private UpdateSubscription? _futuresSubscription;
     private bool _isRunning;
 
     public BitgetMarketDataFeed(
@@ -27,6 +28,10 @@ public class BitgetMarketDataFeed : IMarketDataFeed
     {
         _logger = logger;
         _settings = settings;
+        
+        // Initialize socket client with default options
+        // The library handles auto-reconnection by default
+        _socketClient = new BitgetSocketClient();
     }
 
     public event EventHandler<CandleReceivedEventArgs>? OnCandleReceived;
@@ -41,30 +46,94 @@ public class BitgetMarketDataFeed : IMarketDataFeed
 
         _logger.LogInformation("Starting Bitget market data feed for {Symbol} @ {TimeFrame}", symbol, timeFrame);
         
-        // TODO: Implement using Bitget.Net WebSocket
-        // Example:
-        // var socketClient = new BitgetSocketClient();
-        // var subscription = await socketClient.SpotApi.SubscribeToKlineUpdatesAsync(
-        //     symbol,
-        //     MapTimeFrame(timeFrame),
-        //     data =>
-        //     {
-        //         OnCandleReceived?.Invoke(this, new CandleReceivedEventArgs
-        //         {
-        //             Symbol = data.Symbol,
-        //             Timestamp = data.OpenTime,
-        //             Open = data.OpenPrice,
-        //             High = data.HighPrice,
-        //             Low = data.LowPrice,
-        //             Close = data.ClosePrice,
-        //             Volume = data.Volume
-        //         });
-        //     },
-        //     cancellationToken);
-        
-        await Task.Delay(100, cancellationToken);
-        _isRunning = true;
-        _logger.LogWarning("Bitget market data feed not fully implemented - WebSocket connection TODO");
+        try
+        {
+            var interval = MapTimeFrame(timeFrame);
+            
+            // Subscribe to Spot klines for BTCUSDT
+            const string spotSymbol = "BTCUSDT";
+            var spotResult = await _socketClient.SpotApiV2.SubscribeToKlineUpdatesAsync(
+                spotSymbol,
+                interval,
+                data =>
+                {
+                    // Handle array of updates
+                    foreach (var kline in data.Data)
+                    {
+                        _logger.LogDebug("Spot candle received: {Symbol} @ {Time}, Close: {Close}", 
+                            spotSymbol, kline.OpenTime, kline.ClosePrice);
+                        
+                        OnCandleReceived?.Invoke(this, new CandleReceivedEventArgs
+                        {
+                            Symbol = spotSymbol,
+                            Timestamp = kline.OpenTime,
+                            Open = kline.OpenPrice,
+                            High = kline.HighPrice,
+                            Low = kline.LowPrice,
+                            Close = kline.ClosePrice,
+                            Volume = kline.Volume
+                        });
+                    }
+                },
+                cancellationToken);
+
+            if (spotResult.Success)
+            {
+                _spotSubscription = spotResult.Data;
+                _logger.LogInformation("Successfully subscribed to Spot kline updates for {Symbol}", spotSymbol);
+            }
+            else
+            {
+                _logger.LogError("Failed to subscribe to Spot kline updates: {Error}", spotResult.Error?.Message);
+            }
+
+            // Subscribe to Futures klines for BTCUSDT_UMCBL
+            const string futuresSymbol = "BTCUSDT";  // Symbol without _UMCBL suffix for V2 API
+            const string futuresSymbolDisplay = "BTCUSDT_UMCBL";  // Display symbol with suffix
+            var futuresResult = await _socketClient.FuturesApiV2.SubscribeToKlineUpdatesAsync(
+                BitgetProductTypeV2.UsdtFutures,
+                futuresSymbol,
+                interval,
+                data =>
+                {
+                    // Handle array of updates
+                    foreach (var kline in data.Data)
+                    {
+                        _logger.LogDebug("Futures candle received: {Symbol} @ {Time}, Close: {Close}", 
+                            futuresSymbolDisplay, kline.OpenTime, kline.ClosePrice);
+                        
+                        OnCandleReceived?.Invoke(this, new CandleReceivedEventArgs
+                        {
+                            Symbol = futuresSymbolDisplay,  // Use display symbol with suffix
+                            Timestamp = kline.OpenTime,
+                            Open = kline.OpenPrice,
+                            High = kline.HighPrice,
+                            Low = kline.LowPrice,
+                            Close = kline.ClosePrice,
+                            Volume = kline.Volume
+                        });
+                    }
+                },
+                cancellationToken);
+
+            if (futuresResult.Success)
+            {
+                _futuresSubscription = futuresResult.Data;
+                _logger.LogInformation("Successfully subscribed to Futures kline updates for {Symbol}", futuresSymbolDisplay);
+            }
+            else
+            {
+                _logger.LogError("Failed to subscribe to Futures kline updates: {Error}", futuresResult.Error?.Message);
+            }
+
+            _isRunning = true;
+            _logger.LogInformation("Bitget market data feed started successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error starting Bitget market data feed");
+            throw;
+        }
     }
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
@@ -77,28 +146,49 @@ public class BitgetMarketDataFeed : IMarketDataFeed
 
         _logger.LogInformation("Stopping Bitget market data feed");
         
-        // TODO: Unsubscribe from WebSocket
-        // await subscription.CloseAsync();
-        
-        await Task.Delay(100, cancellationToken);
-        _isRunning = false;
-        _logger.LogInformation("Bitget market data feed stopped");
+        try
+        {
+            // Unsubscribe from Spot WebSocket
+            if (_spotSubscription != null)
+            {
+                await _spotSubscription.CloseAsync();
+                _spotSubscription = null;
+                _logger.LogInformation("Unsubscribed from Spot kline updates");
+            }
+
+            // Unsubscribe from Futures WebSocket
+            if (_futuresSubscription != null)
+            {
+                await _futuresSubscription.CloseAsync();
+                _futuresSubscription = null;
+                _logger.LogInformation("Unsubscribed from Futures kline updates");
+            }
+
+            _isRunning = false;
+            _logger.LogInformation("Bitget market data feed stopped");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error stopping Bitget market data feed");
+            throw;
+        }
     }
 
-    // Helper to map TimeFrame enum to Bitget interval
-    // TODO: Implement when Bitget.Net is integrated
-    // private KlineInterval MapTimeFrame(TimeFrame timeFrame)
-    // {
-    //     return timeFrame switch
-    //     {
-    //         TimeFrame.OneMinute => KlineInterval.OneMinute,
-    //         TimeFrame.FiveMinutes => KlineInterval.FiveMinutes,
-    //         TimeFrame.FifteenMinutes => KlineInterval.FifteenMinutes,
-    //         TimeFrame.ThirtyMinutes => KlineInterval.ThirtyMinutes,
-    //         TimeFrame.OneHour => KlineInterval.OneHour,
-    //         TimeFrame.FourHours => KlineInterval.FourHours,
-    //         TimeFrame.OneDay => KlineInterval.OneDay,
-    //         _ => throw new ArgumentException($"Unsupported timeframe: {timeFrame}")
-    //     };
-    // }
+    /// <summary>
+    /// Maps TimeFrame enum to Bitget stream KlineInterval
+    /// </summary>
+    private BitgetStreamKlineIntervalV2 MapTimeFrame(TimeFrame timeFrame)
+    {
+        return timeFrame switch
+        {
+            TimeFrame.OneMinute => BitgetStreamKlineIntervalV2.OneMinute,
+            TimeFrame.FiveMinutes => BitgetStreamKlineIntervalV2.FiveMinutes,
+            TimeFrame.FifteenMinutes => BitgetStreamKlineIntervalV2.FifteenMinutes,
+            TimeFrame.ThirtyMinutes => BitgetStreamKlineIntervalV2.ThirtyMinutes,
+            TimeFrame.OneHour => BitgetStreamKlineIntervalV2.OneHour,
+            TimeFrame.FourHours => BitgetStreamKlineIntervalV2.FourHours,
+            TimeFrame.OneDay => BitgetStreamKlineIntervalV2.OneDay,
+            _ => throw new ArgumentException($"Unsupported timeframe: {timeFrame}")
+        };
+    }
 }
