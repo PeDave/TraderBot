@@ -17,14 +17,21 @@ public class EfMarketDataStore : IMarketDataStore
     {
         try
         {
-            // Try to add the candle
-            _context.Candles.Add(candle);
-            await _context.SaveChangesAsync(cancellationToken);
+            // Check if candle already exists (avoid duplicates)
+            // This is more efficient than relying on exception handling
+            var exists = await _context.Candles
+                .AnyAsync(c => c.Symbol == candle.Symbol && c.Timestamp == candle.Timestamp, cancellationToken);
+
+            if (!exists)
+            {
+                _context.Candles.Add(candle);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
         }
         catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UNIQUE constraint failed") == true)
         {
-            // Ignore duplicate candle (it already exists in the database)
-            // This is expected behavior for real-time candle updates
+            // Fallback: handle race condition where candle was inserted between check and save
+            // This can happen with concurrent WebSocket updates
             _context.Entry(candle).State = EntityState.Detached;
         }
     }

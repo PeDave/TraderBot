@@ -107,8 +107,11 @@ public class BitgetExchangeClient : IExchangeClient
         
         try
         {
-            // Determine if it's a Spot or Futures symbol
-            bool isFutures = symbol.Contains("_UMCBL") || symbol.Contains("_DMCBL") || symbol.Contains("_CMCBL");
+            // Determine if it's a Spot or Futures symbol based on common Bitget suffixes
+            // Futures symbols typically end with _UMCBL (USDT-margined), _DMCBL (coin-margined), or _CMCBL
+            bool isFutures = symbol.EndsWith("_UMCBL", StringComparison.OrdinalIgnoreCase) || 
+                           symbol.EndsWith("_DMCBL", StringComparison.OrdinalIgnoreCase) || 
+                           symbol.EndsWith("_CMCBL", StringComparison.OrdinalIgnoreCase);
             
             var bitgetSide = side == DomainOrderSide.Buy 
                 ? BitgetOrderSide.Buy 

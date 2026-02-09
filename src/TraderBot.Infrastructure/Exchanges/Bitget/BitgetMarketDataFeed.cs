@@ -44,7 +44,10 @@ public class BitgetMarketDataFeed : IMarketDataFeed
             return;
         }
 
-        _logger.LogInformation("Starting Bitget market data feed for {Symbol} @ {TimeFrame}", symbol, timeFrame);
+        // Note: The symbol parameter is currently not used because this implementation
+        // subscribes to both Spot (BTCUSDT) and Futures (BTCUSDT_UMCBL) simultaneously
+        // as per requirements. Future versions could make this more flexible.
+        _logger.LogInformation("Starting Bitget market data feed for Spot and Futures @ {TimeFrame}", timeFrame);
         
         try
         {
