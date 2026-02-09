@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-TraderBot.Worker-d67c1807-d2fe-47fb-b504-7c60bd0338c4</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TraderBot.Application\TraderBot.Application.csproj" />
+    <ProjectReference Include="..\TraderBot.Infrastructure\TraderBot.Infrastructure.csproj" />
+    <ProjectReference Include="..\TraderBot.Domain\TraderBot.Domain.csproj" />
+  </ItemGroup>
+</Project>
