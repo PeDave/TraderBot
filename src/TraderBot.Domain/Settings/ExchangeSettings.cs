@@ -12,4 +12,5 @@ public class ExchangeSettings
     public string ApiSecret { get; set; } = string.Empty;
     public string? Passphrase { get; set; } // For exchanges that require it
     public bool IsTestnet { get; set; } = true;
+    public string AccountType { get; set; } = "spot"; // "spot" or "futures"
 }
