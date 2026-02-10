@@ -33,13 +33,6 @@ public class WalletService : IWalletService
             return 0;
         }
 
-        // If balance check is not required, return 0 without failing
-        if (!_tradingSettings.RequireBalanceCheck)
-        {
-            _logger.LogDebug("Balance check not required - returning 0 for {Asset}", asset);
-            return 0;
-        }
-
         // Retry logic with exponential backoff
         int attempt = 0;
         int delay = _tradingSettings.RetryDelaySeconds;

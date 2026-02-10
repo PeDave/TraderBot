@@ -99,7 +99,7 @@ public class BitgetExchangeClient : IExchangeClient
                 else
                 {
                     var errorCode = spotResult.Error?.Code?.ToString() ?? "Unknown";
-                    var errorMessage = spotResult.Error?.Message ?? "(null)";
+                    var errorMessage = spotResult.Error?.Message ?? "Unknown";
                     _logger.LogError("Failed to get spot balance - Error Code: {ErrorCode}, Message: {ErrorMessage}", 
                         errorCode, errorMessage);
                     throw new Exception($"Failed to get spot balance: Code={errorCode}, Message={errorMessage}");
