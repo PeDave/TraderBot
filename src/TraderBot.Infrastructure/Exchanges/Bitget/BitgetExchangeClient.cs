@@ -36,7 +36,11 @@ public class BitgetExchangeClient : IExchangeClient
         // Initialize Bitget REST client
         _client = new BitgetRestClient(options =>
         {
-            if (!string.IsNullOrEmpty(_settings.ApiKey))
+            // Only set credentials if they are properly configured
+            if (!string.IsNullOrEmpty(_settings.ApiKey) && 
+                !string.IsNullOrEmpty(_settings.ApiSecret) &&
+                !string.IsNullOrEmpty(_settings.Passphrase) &&
+                !_settings.Passphrase.Equals("YOUR_PASSPHRASE_HERE", StringComparison.OrdinalIgnoreCase))
             {
                 options.ApiCredentials = new ApiCredentials(_settings.ApiKey, _settings.ApiSecret, _settings.Passphrase);
             }
