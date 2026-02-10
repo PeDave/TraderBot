@@ -76,7 +76,9 @@ public class WalletService : IWalletService
             }
         }
 
-        // Should not reach here, but return 0 as fallback
+        // Safety fallback - should not be reached under normal circumstances
+        // The loop exits via return or throw in all expected code paths
+        _logger.LogWarning("Unexpected exit from retry loop for {Asset}, returning 0", asset);
         return 0;
     }
 

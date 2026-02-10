@@ -320,8 +320,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ### Balance Check Failures
 
 **Symptoms:**
-- Logs show: "Failed to get balance: 92.249.239.147" or "Failed to get balance: (null)"
-- Worker exits with code -1
+- Logs show errors like:
+  - Old version: "Failed to get balance: 92.249.239.147" or "Failed to get balance: (null)"
+  - New version: "Failed to get spot balance - Error Code: {Code}, Message: {Message}"
+- Worker exits with code -1 (in older versions without this fix)
 - Balance requests time out or return errors
 
 **Solutions:**
@@ -368,11 +370,12 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - Ensure firewall allows outbound WebSocket connections
 - Try switching `IsTestnet` setting
 
-### Logs Show "Futures account balance query not yet fully implemented"
+### Logs Show "Futures account balance query is not fully implemented"
 
-This is expected if `AccountType` is set to `"futures"`. Either:
-- Switch to `"spot"` account type, OR
-- Set `Trading:Enabled=false` and `RequireBalanceCheck=false` for market-data-only mode
+This is expected if `AccountType` is set to `"futures"`. The current Bitget.Net library version may not have the required API endpoints for futures balance queries. Options:
+- Use `"spot"` account type if spot trading meets your needs, OR
+- Set `Trading:Enabled=false` for market-data-only mode, OR
+- Wait for library updates that support futures balance queries
 
 ## ⚡ Support
 

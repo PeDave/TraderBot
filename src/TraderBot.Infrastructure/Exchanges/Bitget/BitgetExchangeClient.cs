@@ -77,11 +77,11 @@ public class BitgetExchangeClient : IExchangeClient
             
             if (isFutures)
             {
-                // TODO: Futures account balance query needs proper API endpoint
-                // The current Bitget.Net library version may not support direct futures balance query
-                // For now, log a warning and return 0
-                _logger.LogWarning("Futures account balance query not yet fully implemented. Returning 0 for {Asset}. " +
-                    "Please set Trading:Enabled=false for market-data-only mode or use AccountType=spot.", asset);
+                // Futures account balance query is not fully implemented in the current Bitget.Net library version
+                // The library may not have the required API endpoint available
+                _logger.LogWarning("Futures account balance query is not fully implemented in the current library version. " +
+                    "Returning 0 for {Asset}. For production use with futures, please verify the library supports the required API endpoints, " +
+                    "or use AccountType=spot if spot trading is suitable for your needs.", asset);
                 return 0;
             }
             else

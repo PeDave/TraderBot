@@ -12,8 +12,9 @@ public class TradingSettings
 
     /// <summary>
     /// Require successful balance check before trading (when Enabled = true)
+    /// Default is false to allow graceful operation even with API credential issues
     /// </summary>
-    public bool RequireBalanceCheck { get; set; } = true;
+    public bool RequireBalanceCheck { get; set; } = false;
 
     /// <summary>
     /// Account type to use for balance checks: "spot" or "futures"
