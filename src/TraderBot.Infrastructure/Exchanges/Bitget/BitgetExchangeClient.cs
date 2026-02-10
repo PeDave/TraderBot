@@ -68,28 +68,48 @@ public class BitgetExchangeClient : IExchangeClient
 
     public async Task<decimal> GetBalanceAsync(string asset, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Getting balance for asset: {Asset}", asset);
+        _logger.LogInformation("Getting {AccountType} balance for asset: {Asset}", _settings.AccountType, asset);
         
         try
         {
-            var result = await _client.SpotApiV2.Account.GetSpotBalancesAsync(ct: cancellationToken);
-            if (result.Success && result.Data != null)
+            // Support both spot and futures account types
+            bool isFutures = _settings.AccountType.Equals("futures", StringComparison.OrdinalIgnoreCase);
+            
+            if (isFutures)
             {
-                var balance = result.Data.FirstOrDefault(b => b.Asset.Equals(asset, StringComparison.OrdinalIgnoreCase));
-                var available = balance?.Available ?? 0;
-                _logger.LogInformation("Balance for {Asset}: {Balance}", asset, available);
-                return available;
+                // Futures account balance query is not fully implemented in the current Bitget.Net library version
+                // The library may not have the required API endpoint available
+                _logger.LogWarning("Futures account balance query is not fully implemented in the current library version. " +
+                    "Returning 0 for {Asset}. For production use with futures, please verify the library supports the required API endpoints, " +
+                    "or use AccountType=spot if spot trading is suitable for your needs.", asset);
+                return 0;
             }
             else
             {
-                _logger.LogError("Failed to get balance: {Error}", result.Error?.Message);
-                return 0;
+                // Get spot account balance
+                var spotResult = await _client.SpotApiV2.Account.GetSpotBalancesAsync(ct: cancellationToken);
+                
+                if (spotResult.Success && spotResult.Data != null)
+                {
+                    var balance = spotResult.Data.FirstOrDefault(b => b.Asset.Equals(asset, StringComparison.OrdinalIgnoreCase));
+                    var available = balance?.Available ?? 0;
+                    _logger.LogInformation("Spot balance for {Asset}: {Balance}", asset, available);
+                    return available;
+                }
+                else
+                {
+                    var errorCode = spotResult.Error?.Code?.ToString() ?? "Unknown";
+                    var errorMessage = spotResult.Error?.Message ?? "Unknown";
+                    _logger.LogError("Failed to get spot balance - Error Code: {ErrorCode}, Message: {ErrorMessage}", 
+                        errorCode, errorMessage);
+                    throw new Exception($"Failed to get spot balance: Code={errorCode}, Message={errorMessage}");
+                }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting balance for {Asset}", asset);
-            return 0;
+            _logger.LogError(ex, "Exception getting {AccountType} balance for {Asset}", _settings.AccountType, asset);
+            throw;
         }
     }
 

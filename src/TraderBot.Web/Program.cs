@@ -43,9 +43,11 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 // Configure settings
 var exchangeSettings = builder.Configuration.GetSection("Exchange").Get<ExchangeSettings>() ?? new ExchangeSettings();
 var botSettings = builder.Configuration.GetSection("Bot").Get<BotSettings>() ?? new BotSettings();
+var tradingSettings = builder.Configuration.GetSection("Trading").Get<TradingSettings>() ?? new TradingSettings();
 
 builder.Services.AddSingleton(exchangeSettings);
 builder.Services.AddSingleton(botSettings);
+builder.Services.AddSingleton(tradingSettings);
 
 // Register application services
 builder.Services.AddScoped<IMarketDataStore, EfMarketDataStore>();

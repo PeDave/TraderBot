@@ -60,13 +60,71 @@ Configure your exchange credentials in `appsettings.json`:
     "ExchangeType": "Bitget",
     "ApiKey": "YOUR_API_KEY_HERE",
     "ApiSecret": "YOUR_API_SECRET_HERE",
-    "Passphrase": null,
-    "IsTestnet": true
+    "Passphrase": "YOUR_PASSPHRASE_HERE",
+    "IsTestnet": true,
+    "AccountType": "spot"
   }
 }
 ```
 
+**Important Notes:**
+- **ApiKey/ApiSecret/Passphrase**: Obtain these from your Bitget account settings > API Management
+  - For Bitget, the Passphrase is **required** (created when you generate the API key)
+  - Make sure IP whitelist is either disabled or includes your server IP
+  - Enable appropriate permissions: Read for market-data-only, Read+Trade for trading
+- **IsTestnet**: Set to `true` for testnet/sandbox, `false` for production trading
+- **AccountType**: Use `"spot"` for spot trading, `"futures"` for futures (futures support is limited in current version)
+
 ⚠️ **Security**: Never commit real API keys to source control. Use environment variables or Azure Key Vault for production deployments.
+
+### Trading Settings
+
+Control trading execution and error handling:
+
+```json
+{
+  "Trading": {
+    "Enabled": false,
+    "RequireBalanceCheck": false,
+    "AccountType": "spot",
+    "MaxRetries": 3,
+    "RetryDelaySeconds": 2,
+    "UseExponentialBackoff": true
+  }
+}
+```
+
+**Settings Explained:**
+- **Enabled**: `false` = market-data-only mode (no trading, no balance checks), `true` = enable trading
+- **RequireBalanceCheck**: When `true`, the bot stops if balance checks fail; when `false`, continues with 0 balance fallback
+- **AccountType**: Must match the account type you want to query (`"spot"` or `"futures"`)
+- **MaxRetries**: Number of retry attempts for failed API calls (default: 3)
+- **RetryDelaySeconds**: Initial delay between retries in seconds (default: 2)
+- **UseExponentialBackoff**: When `true`, doubles the delay after each retry (2s → 4s → 8s)
+
+**Recommended Configurations:**
+
+*Market Data Collection Only:*
+```json
+{
+  "Trading": {
+    "Enabled": false,
+    "RequireBalanceCheck": false
+  }
+}
+```
+
+*Production Trading:*
+```json
+{
+  "Trading": {
+    "Enabled": true,
+    "RequireBalanceCheck": true,
+    "AccountType": "spot",
+    "MaxRetries": 3
+  }
+}
+```
 
 ### Bot Settings
 
@@ -256,6 +314,68 @@ See `TraderBot.Contracts.N8n` for request/response schemas.
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 🔍 Troubleshooting
+
+### Balance Check Failures
+
+**Symptoms:**
+- Logs show errors like:
+  - Old version: "Failed to get balance: 92.249.239.147" or "Failed to get balance: (null)"
+  - New version: "Failed to get spot balance - Error Code: {Code}, Message: {Message}"
+- Worker exits with code -1 (in older versions without this fix)
+- Balance requests time out or return errors
+
+**Solutions:**
+
+1. **Check API Credentials:**
+   - Verify ApiKey, ApiSecret, and Passphrase are correct
+   - Ensure Passphrase is not null or empty (required for Bitget)
+   - Test credentials on Bitget website first
+
+2. **IP Whitelist:**
+   - Disable IP whitelist in Bitget API settings, OR
+   - Add your server's IP address to the whitelist
+   - Note: The error message often shows an IP address that failed authentication
+
+3. **API Permissions:**
+   - Ensure API key has "Read" permission for balance checks
+   - Add "Trade" permission if trading is enabled
+   - Regenerate API key if permissions were changed
+
+4. **Use Market-Data-Only Mode:**
+   ```json
+   {
+     "Trading": {
+       "Enabled": false,
+       "RequireBalanceCheck": false
+     }
+   }
+   ```
+   This allows the Worker to run and collect market data even if balance checks fail.
+
+5. **Check Account Type:**
+   - Ensure `Trading:AccountType` matches your intended account type
+   - Use `"spot"` for spot trading (most common)
+   - Futures balance queries have limited support in current version
+
+### Worker Keeps Crashing
+
+**Solution:** The worker has been updated with graceful error handling. Update to the latest version and use the `Trading:Enabled=false` configuration for stable market-data collection.
+
+### WebSocket Connection Issues
+
+- Verify internet connectivity
+- Check if Bitget API is operational (status.bitget.com)
+- Ensure firewall allows outbound WebSocket connections
+- Try switching `IsTestnet` setting
+
+### Logs Show "Futures account balance query is not fully implemented"
+
+This is expected if `AccountType` is set to `"futures"`. The current Bitget.Net library version may not have the required API endpoints for futures balance queries. Options:
+- Use `"spot"` account type if spot trading meets your needs, OR
+- Set `Trading:Enabled=false` for market-data-only mode, OR
+- Wait for library updates that support futures balance queries
 
 ## ⚡ Support
 

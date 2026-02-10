@@ -29,15 +29,37 @@ public class Worker : BackgroundService
                 await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // This is expected when stopping the service
+            _logger.LogInformation("TraderBot Worker stopping due to cancellation");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Fatal error in TraderBot Worker");
-            throw;
+            _logger.LogError(ex, "Error in TraderBot Worker - attempting graceful recovery");
+            
+            // Don't throw - let the worker continue running for market data collection
+            // The orchestrator will handle its own state
+            try
+            {
+                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("TraderBot Worker stopping during error recovery");
+            }
         }
         finally
         {
             _logger.LogInformation("Stopping bot...");
-            await _orchestrator.StopAsync(CancellationToken.None);
+            try
+            {
+                await _orchestrator.StopAsync(CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error stopping orchestrator");
+            }
         }
     }
 }
