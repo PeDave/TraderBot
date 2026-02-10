@@ -23,6 +23,9 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new() { Title = "TraderBot API", Version = "v1" });
 });
 
+// Add HttpClient for Bitget V2 API calls
+builder.Services.AddHttpClient();
+
 // Configure databases
 builder.Services.AddDbContext<TradingDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("TradingDb") ?? "Data Source=trading.db"));

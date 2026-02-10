@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging;
 using TraderBot.Application.Ports;
+using TraderBot.Contracts.DTOs;
 using TraderBot.Domain.Abstractions;
 using TraderBot.Domain.Settings;
+using TraderBot.Infrastructure.Exchanges.Bitget;
 
 namespace TraderBot.Infrastructure.Services;
 
@@ -110,5 +112,72 @@ public class WalletService : IWalletService
         }
 
         return balances;
+    }
+
+    public async Task<AccountSummaryDto> GetAccountSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Getting account summary");
+
+        // If trading is disabled, return empty summary
+        if (!_tradingSettings.Enabled)
+        {
+            _logger.LogDebug("Trading disabled - returning empty account summary");
+            return new AccountSummaryDto();
+        }
+
+        // Check if the exchange client is Bitget (only Bitget supports V2 account summary endpoint)
+        if (_exchangeClient is not BitgetExchangeClient bitgetClient)
+        {
+            _logger.LogWarning("Account summary is only supported for Bitget exchange. Current exchange: {Exchange}",
+                _exchangeClient.ExchangeType);
+            return new AccountSummaryDto();
+        }
+
+        // Retry logic with exponential backoff
+        int attempt = 0;
+        int delay = _tradingSettings.RetryDelaySeconds;
+
+        while (attempt < _tradingSettings.MaxRetries)
+        {
+            try
+            {
+                var summary = await bitgetClient.GetAccountSummaryAsync(cancellationToken);
+                return summary;
+            }
+            catch (Exception ex)
+            {
+                attempt++;
+
+                if (attempt >= _tradingSettings.MaxRetries)
+                {
+                    _logger.LogError(ex, "Failed to get account summary after {Attempts} attempts", attempt);
+
+                    // If balance check is required, throw the exception
+                    if (_tradingSettings.RequireBalanceCheck)
+                    {
+                        throw;
+                    }
+
+                    // Otherwise, return empty summary as fallback
+                    _logger.LogWarning("Returning empty account summary as fallback");
+                    return new AccountSummaryDto();
+                }
+
+                _logger.LogWarning(ex, "Account summary request failed (attempt {Attempt}/{MaxAttempts}), retrying in {Delay}s",
+                    attempt, _tradingSettings.MaxRetries, delay);
+
+                await Task.Delay(TimeSpan.FromSeconds(delay), cancellationToken);
+
+                // Exponential backoff
+                if (_tradingSettings.UseExponentialBackoff)
+                {
+                    delay *= 2;
+                }
+            }
+        }
+
+        // Safety fallback
+        _logger.LogWarning("Unexpected exit from retry loop, returning empty account summary");
+        return new AccountSummaryDto();
     }
 }

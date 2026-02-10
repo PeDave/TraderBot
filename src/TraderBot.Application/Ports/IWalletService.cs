@@ -1,3 +1,5 @@
+using TraderBot.Contracts.DTOs;
+
 namespace TraderBot.Application.Ports;
 
 /// <summary>
@@ -7,4 +9,5 @@ public interface IWalletService
 {
     Task<decimal> GetAvailableBalanceAsync(string asset, CancellationToken cancellationToken = default);
     Task<Dictionary<string, decimal>> GetAllBalancesAsync(CancellationToken cancellationToken = default);
+    Task<AccountSummaryDto> GetAccountSummaryAsync(CancellationToken cancellationToken = default);
 }
