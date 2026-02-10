@@ -66,4 +66,69 @@ public class WalletController : ControllerBase
             return StatusCode(500, $"Error retrieving balance for {asset}");
         }
     }
+
+    /// <summary>
+    /// Get account balance summary across all account types (Bitget V2 API)
+    /// Uses GET /api/v2/account/all-account-balance endpoint
+    /// Requires API key with account read permission
+    /// </summary>
+    [HttpGet("summary")]
+    public async Task<ActionResult<AccountBalanceSummaryDto>> GetAccountSummary(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var accountBalances = await _walletService.GetAccountSummaryAsync(cancellationToken);
+            
+            var summary = new AccountBalanceSummaryDto
+            {
+                AccountBalances = accountBalances
+            };
+
+            // Populate normalized fields for convenience
+            foreach (var kvp in accountBalances)
+            {
+                var accountType = kvp.Key.ToLowerInvariant();
+                var balance = kvp.Value;
+
+                switch (accountType)
+                {
+                    case "spot":
+                        summary.SpotUsdt = balance;
+                        break;
+                    case "futures":
+                    case "mix_usdt":
+                    case "usdt_futures":
+                        summary.FuturesUsdt = balance;
+                        break;
+                    case "funding":
+                    case "fund":
+                        summary.FundingUsdt = balance;
+                        break;
+                    case "earn":
+                    case "earning":
+                        summary.EarnUsdt = balance;
+                        break;
+                    case "bots":
+                    case "copy_trading":
+                        summary.BotsUsdt = balance;
+                        break;
+                    case "margin":
+                    case "cross_margin":
+                    case "isolated_margin":
+                        summary.MarginUsdt = balance;
+                        break;
+                }
+            }
+
+            _logger.LogInformation("Returning account summary with {Count} account types, total: {Total} USDT", 
+                accountBalances.Count, summary.TotalUsdt);
+            
+            return Ok(summary);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting account balance summary");
+            return StatusCode(500, "Error retrieving account balance summary");
+        }
+    }
 }

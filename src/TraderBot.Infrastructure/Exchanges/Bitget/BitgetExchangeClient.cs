@@ -10,6 +10,9 @@ using DomainOrderSide = TraderBot.Domain.Enums.OrderSide;
 using DomainOrderType = TraderBot.Domain.Enums.OrderType;
 using BitgetOrderSide = Bitget.Net.Enums.V2.OrderSide;
 using BitgetOrderType = Bitget.Net.Enums.V2.OrderType;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace TraderBot.Infrastructure.Exchanges.Bitget;
 
@@ -21,13 +24,16 @@ public class BitgetExchangeClient : IExchangeClient
     private readonly ILogger<BitgetExchangeClient> _logger;
     private readonly ExchangeSettings _settings;
     private readonly BitgetRestClient _client;
+    private readonly HttpClient _httpClient;
 
     public BitgetExchangeClient(
         ILogger<BitgetExchangeClient> logger,
-        ExchangeSettings settings)
+        ExchangeSettings settings,
+        HttpClient httpClient)
     {
         _logger = logger;
         _settings = settings;
+        _httpClient = httpClient;
 
         // Initialize Bitget REST client
         _client = new BitgetRestClient(options =>
@@ -203,5 +209,113 @@ public class BitgetExchangeClient : IExchangeClient
             _logger.LogError(ex, "Error placing order for {Symbol}", symbol);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Get all account balances from Bitget V2 API endpoint
+    /// Uses GET /api/v2/account/all-account-balance
+    /// </summary>
+    public async Task<Dictionary<string, decimal>> GetAllAccountBalancesAsync(CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Getting all account balances from Bitget V2 API");
+        
+        try
+        {
+            const string endpoint = "/api/v2/account/all-account-balance";
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            var method = "GET";
+            var queryString = "";
+            var body = "";
+
+            // Create signature for Bitget V2 API
+            var signString = $"{timestamp}{method}{endpoint}{queryString}{body}";
+            var signature = GenerateSignature(signString, _settings.ApiSecret);
+
+            // Build request URL
+            var baseUrl = _settings.IsTestnet 
+                ? "https://api.bitget.com" 
+                : "https://api.bitget.com";
+            var requestUrl = $"{baseUrl}{endpoint}{queryString}";
+
+            // Create HTTP request with Bitget V2 auth headers
+            using var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+            request.Headers.Add("ACCESS-KEY", _settings.ApiKey);
+            request.Headers.Add("ACCESS-SIGN", signature);
+            request.Headers.Add("ACCESS-PASSPHRASE", _settings.Passphrase);
+            request.Headers.Add("ACCESS-TIMESTAMP", timestamp);
+            request.Headers.Add("locale", "en-US");
+            request.Headers.Add("Content-Type", "application/json");
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError("Failed to get all account balances. Status: {Status}, Response: {Response}", 
+                    response.StatusCode, responseContent);
+                throw new Exception($"Failed to get all account balances: {response.StatusCode}");
+            }
+
+            // Parse response
+            using var doc = JsonDocument.Parse(responseContent);
+            var root = doc.RootElement;
+
+            // Check for error in response
+            if (root.TryGetProperty("code", out var codeElement))
+            {
+                var code = codeElement.GetString();
+                if (code != "00000")
+                {
+                    var message = root.TryGetProperty("msg", out var msgElement) 
+                        ? msgElement.GetString() 
+                        : "Unknown error";
+                    _logger.LogError("Bitget API error - Code: {Code}, Message: {Message}", code, message);
+                    throw new Exception($"Bitget API error: Code={code}, Message={message}");
+                }
+            }
+
+            // Parse account balances
+            var accountBalances = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+            
+            if (root.TryGetProperty("data", out var dataElement) && dataElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var accountElement in dataElement.EnumerateArray())
+                {
+                    if (accountElement.TryGetProperty("accountType", out var typeElement) &&
+                        accountElement.TryGetProperty("usdtBalance", out var balanceElement))
+                    {
+                        var accountType = typeElement.GetString() ?? "unknown";
+                        var usdtBalance = decimal.TryParse(balanceElement.GetString(), out var balance) 
+                            ? balance 
+                            : 0m;
+                        
+                        accountBalances[accountType] = usdtBalance;
+                        _logger.LogDebug("Account balance - Type: {Type}, USDT: {Balance}", accountType, usdtBalance);
+                    }
+                }
+            }
+
+            _logger.LogInformation("Retrieved balances for {Count} account types", accountBalances.Count);
+            return accountBalances;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting all account balances");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Generate HMAC SHA256 signature for Bitget V2 API
+    /// </summary>
+    private static string GenerateSignature(string message, string secret)
+    {
+        var encoding = new UTF8Encoding();
+        var keyBytes = encoding.GetBytes(secret);
+        var messageBytes = encoding.GetBytes(message);
+        
+        using var hmac = new HMACSHA256(keyBytes);
+        var hashBytes = hmac.ComputeHash(messageBytes);
+        return Convert.ToBase64String(hashBytes);
     }
 }
