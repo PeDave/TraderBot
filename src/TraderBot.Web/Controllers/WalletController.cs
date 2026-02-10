@@ -66,4 +66,22 @@ public class WalletController : ControllerBase
             return StatusCode(500, $"Error retrieving balance for {asset}");
         }
     }
+
+    /// <summary>
+    /// Get account summary with balances across all account types (Bitget V2 API)
+    /// </summary>
+    [HttpGet("summary")]
+    public async Task<ActionResult<AccountSummaryDto>> GetAccountSummary(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var summary = await _walletService.GetAccountSummaryAsync(cancellationToken);
+            return Ok(summary);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting account summary");
+            return StatusCode(500, "Error retrieving account summary");
+        }
+    }
 }

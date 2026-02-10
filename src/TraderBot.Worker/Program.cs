@@ -13,6 +13,9 @@ using TraderBot.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
 
+// Add HttpClient for Bitget V2 API calls
+builder.Services.AddHttpClient();
+
 // Configure databases
 builder.Services.AddDbContext<TradingDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("TradingDb") ?? "Data Source=trading.db"));

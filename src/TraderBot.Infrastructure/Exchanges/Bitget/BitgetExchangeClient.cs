@@ -3,9 +3,11 @@ using Bitget.Net.Enums;
 using Bitget.Net.Enums.V2;
 using CryptoExchange.Net.Authentication;
 using Microsoft.Extensions.Logging;
+using TraderBot.Contracts.DTOs;
 using TraderBot.Domain.Abstractions;
 using TraderBot.Domain.Enums;
 using TraderBot.Domain.Settings;
+using TraderBot.Infrastructure.Exchanges.Bitget.Models;
 using DomainOrderSide = TraderBot.Domain.Enums.OrderSide;
 using DomainOrderType = TraderBot.Domain.Enums.OrderType;
 using BitgetOrderSide = Bitget.Net.Enums.V2.OrderSide;
@@ -21,10 +23,12 @@ public class BitgetExchangeClient : IExchangeClient
     private readonly ILogger<BitgetExchangeClient> _logger;
     private readonly ExchangeSettings _settings;
     private readonly BitgetRestClient _client;
+    private readonly BitgetV2RestClient _v2Client;
 
     public BitgetExchangeClient(
         ILogger<BitgetExchangeClient> logger,
-        ExchangeSettings settings)
+        ExchangeSettings settings,
+        IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
         _settings = settings;
@@ -32,11 +36,19 @@ public class BitgetExchangeClient : IExchangeClient
         // Initialize Bitget REST client
         _client = new BitgetRestClient(options =>
         {
-            if (!string.IsNullOrEmpty(_settings.ApiKey))
+            // Only set credentials if they are properly configured
+            if (!string.IsNullOrEmpty(_settings.ApiKey) && 
+                !string.IsNullOrEmpty(_settings.ApiSecret) &&
+                !string.IsNullOrEmpty(_settings.Passphrase) &&
+                !_settings.Passphrase.Equals("YOUR_PASSPHRASE_HERE", StringComparison.OrdinalIgnoreCase))
             {
                 options.ApiCredentials = new ApiCredentials(_settings.ApiKey, _settings.ApiSecret, _settings.Passphrase);
             }
         });
+
+        // Initialize V2 REST client for custom endpoints
+        var httpClient = httpClientFactory.CreateClient();
+        _v2Client = new BitgetV2RestClient(httpClient, settings);
     }
 
     public ExchangeType ExchangeType => ExchangeType.Bitget;
@@ -202,6 +214,109 @@ public class BitgetExchangeClient : IExchangeClient
         {
             _logger.LogError(ex, "Error placing order for {Symbol}", symbol);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Get account summary with balances across all account types
+    /// Implements Bitget V2 API endpoint: GET /api/v2/account/all-account-balance
+    /// </summary>
+    public async Task<AccountSummaryDto> GetAccountSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Getting account summary from Bitget V2 API");
+
+        try
+        {
+            var response = await _v2Client.GetAsync<BitgetV2Response<BitgetAccountBalanceList>>(
+                "/api/v2/account/all-account-balance",
+                cancellationToken);
+
+            if (response == null)
+            {
+                _logger.LogError("Received null response from Bitget V2 API");
+                return new AccountSummaryDto();
+            }
+
+            if (!response.IsSuccess)
+            {
+                _logger.LogError("Bitget V2 API returned error - Code: {Code}, Message: {Message}",
+                    response.Code, response.Message);
+                return new AccountSummaryDto();
+            }
+
+            if (response.Data == null)
+            {
+                _logger.LogWarning("Bitget V2 API returned success but no data");
+                return new AccountSummaryDto();
+            }
+
+            // Parse and transform the response
+            var summary = new AccountSummaryDto();
+
+            // Parse total USDT
+            if (decimal.TryParse(response.Data.TotalUSDT, out var totalUsdt))
+            {
+                summary.TotalUsdt = totalUsdt;
+            }
+
+            // Parse account balances
+            foreach (var account in response.Data.AccountList)
+            {
+                if (decimal.TryParse(account.UsdtBalance, out var usdtBalance))
+                {
+                    var accountBalance = new AccountBalanceDto
+                    {
+                        AccountType = account.AccountType,
+                        UsdtBalance = usdtBalance
+                    };
+
+                    summary.Balances.Add(accountBalance);
+                    summary.BalancesByType[account.AccountType] = usdtBalance;
+
+                    // Set convenience properties for common account types
+                    var accountTypeLower = account.AccountType.ToLowerInvariant();
+                    switch (accountTypeLower)
+                    {
+                        case "spot":
+                            summary.SpotBalance = usdtBalance;
+                            break;
+                        case "futures":
+                        case "mix":
+                            summary.FuturesBalance = usdtBalance;
+                            break;
+                        case "funding":
+                            summary.FundingBalance = usdtBalance;
+                            break;
+                        case "earn":
+                            summary.EarnBalance = usdtBalance;
+                            break;
+                        case "bots":
+                            summary.BotsBalance = usdtBalance;
+                            break;
+                        case "margin":
+                        case "cross_margin":
+                        case "isolated_margin":
+                            summary.MarginBalance += usdtBalance; // Aggregate margin types
+                            break;
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to parse USDT balance for account type {AccountType}: {Balance}",
+                        account.AccountType, account.UsdtBalance);
+                }
+            }
+
+            _logger.LogInformation("Successfully retrieved account summary. Total USDT: {Total}, Account types: {Count}",
+                summary.TotalUsdt, summary.Balances.Count);
+
+            return summary;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting account summary from Bitget V2 API");
+            // Return empty summary on error for graceful degradation
+            return new AccountSummaryDto();
         }
     }
 }

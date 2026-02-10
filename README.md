@@ -71,7 +71,9 @@ Configure your exchange credentials in `appsettings.json`:
 - **ApiKey/ApiSecret/Passphrase**: Obtain these from your Bitget account settings > API Management
   - For Bitget, the Passphrase is **required** (created when you generate the API key)
   - Make sure IP whitelist is either disabled or includes your server IP
-  - Enable appropriate permissions: Read for market-data-only, Read+Trade for trading
+  - Enable appropriate permissions: 
+    - **Read** permission for market data and balance queries (including account summary)
+    - **Trade** permission if trading is enabled
 - **IsTestnet**: Set to `true` for testnet/sandbox, `false` for production trading
 - **AccountType**: Use `"spot"` for spot trading, `"futures"` for futures (futures support is limited in current version)
 
@@ -202,6 +204,30 @@ The worker will:
 
 - `GET /api/wallet/balances` - Get all wallet balances
 - `GET /api/wallet/balance/{asset}` - Get balance for specific asset
+- `GET /api/wallet/summary` - Get account summary with USDT balances across all account types (Bitget V2 API)
+
+**Account Summary Response:**
+```json
+{
+  "balances": [
+    { "accountType": "spot", "usdtBalance": 1000.50 },
+    { "accountType": "futures", "usdtBalance": 2000.00 },
+    { "accountType": "funding", "usdtBalance": 500.00 }
+  ],
+  "balancesByType": {
+    "spot": 1000.50,
+    "futures": 2000.00,
+    "funding": 500.00
+  },
+  "totalUsdt": 3500.50,
+  "spotBalance": 1000.50,
+  "futuresBalance": 2000.00,
+  "fundingBalance": 500.00,
+  "earnBalance": 0,
+  "botsBalance": 0,
+  "marginBalance": 0
+}
+```
 
 ### Market Data
 
