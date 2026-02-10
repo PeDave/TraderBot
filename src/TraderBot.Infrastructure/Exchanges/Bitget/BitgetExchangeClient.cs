@@ -270,9 +270,9 @@ public class BitgetExchangeClient : IExchangeClient
             var signature = GenerateSignature(signString, _settings.ApiSecret);
 
             // Build request URL
-            var baseUrl = _settings.IsTestnet 
-                ? "https://api.bitget.com" 
-                : "https://api.bitget.com";
+            // Note: Bitget uses the same base URL for both testnet and production
+            // The testnet uses a separate API key/secret pair for sandbox environment
+            var baseUrl = "https://api.bitget.com";
             var requestUrl = $"{baseUrl}{endpoint}{queryString}";
 
             // Create HTTP request with Bitget V2 auth headers
@@ -282,7 +282,6 @@ public class BitgetExchangeClient : IExchangeClient
             request.Headers.Add("ACCESS-PASSPHRASE", _settings.Passphrase);
             request.Headers.Add("ACCESS-TIMESTAMP", timestamp);
             request.Headers.Add("locale", "en-US");
-            request.Headers.Add("Content-Type", "application/json");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
             var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);

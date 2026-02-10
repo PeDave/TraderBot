@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging;
 using TraderBot.Application.Ports;
 using TraderBot.Domain.Abstractions;
 using TraderBot.Domain.Settings;
-using TraderBot.Infrastructure.Exchanges.Bitget;
 
 namespace TraderBot.Infrastructure.Services;
 
@@ -132,19 +131,11 @@ public class WalletService : IWalletService
         {
             try
             {
-                // Cast to BitgetExchangeClient to access GetAllAccountBalancesAsync
-                if (_exchangeClient is BitgetExchangeClient bitgetClient)
-                {
-                    var accountBalances = await bitgetClient.GetAllAccountBalancesAsync(cancellationToken);
-                    _logger.LogInformation("Successfully retrieved account summary with {Count} account types", 
-                        accountBalances.Count);
-                    return accountBalances;
-                }
-                else
-                {
-                    _logger.LogWarning("Exchange client does not support GetAllAccountBalancesAsync");
-                    return new Dictionary<string, decimal>();
-                }
+                // Call GetAllAccountBalancesAsync through the interface
+                var accountBalances = await _exchangeClient.GetAllAccountBalancesAsync(cancellationToken);
+                _logger.LogInformation("Successfully retrieved account summary with {Count} account types", 
+                    accountBalances.Count);
+                return accountBalances;
             }
             catch (Exception ex)
             {

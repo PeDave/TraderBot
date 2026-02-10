@@ -20,4 +20,10 @@ public interface IExchangeClient
         decimal quantity,
         decimal? price = null,
         CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Get all account balances across different account types (spot, futures, funding, etc.)
+    /// Returns a dictionary of account type to USDT balance
+    /// </summary>
+    Task<Dictionary<string, decimal>> GetAllAccountBalancesAsync(CancellationToken cancellationToken = default);
 }
