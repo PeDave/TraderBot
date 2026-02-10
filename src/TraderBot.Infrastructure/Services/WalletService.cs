@@ -41,10 +41,10 @@ public class WalletService : IWalletService
         }
 
         // Retry logic with exponential backoff
-        int retries = 0;
+        int attempt = 0;
         int delay = _tradingSettings.RetryDelaySeconds;
 
-        while (retries <= _tradingSettings.MaxRetries)
+        while (attempt < _tradingSettings.MaxRetries)
         {
             try
             {
@@ -53,11 +53,11 @@ public class WalletService : IWalletService
             }
             catch (Exception ex)
             {
-                retries++;
+                attempt++;
                 
-                if (retries > _tradingSettings.MaxRetries)
+                if (attempt >= _tradingSettings.MaxRetries)
                 {
-                    _logger.LogError(ex, "Failed to get balance for {Asset} after {Retries} retries", asset, _tradingSettings.MaxRetries);
+                    _logger.LogError(ex, "Failed to get balance for {Asset} after {Attempts} attempts", asset, attempt);
                     
                     // If balance check is required, throw the exception
                     if (_tradingSettings.RequireBalanceCheck)
@@ -71,7 +71,7 @@ public class WalletService : IWalletService
                 }
 
                 _logger.LogWarning(ex, "Balance request failed for {Asset} (attempt {Attempt}/{MaxAttempts}), retrying in {Delay}s", 
-                    asset, retries, _tradingSettings.MaxRetries + 1, delay);
+                    asset, attempt, _tradingSettings.MaxRetries, delay);
                 
                 await Task.Delay(TimeSpan.FromSeconds(delay), cancellationToken);
                 
