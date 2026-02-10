@@ -111,4 +111,66 @@ public class WalletService : IWalletService
 
         return balances;
     }
+
+    public async Task<Dictionary<string, decimal>> GetAccountSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Getting account balance summary");
+        
+        // If trading is disabled and balance check is not required, return empty dictionary
+        if (!_tradingSettings.Enabled && !_tradingSettings.RequireBalanceCheck)
+        {
+            _logger.LogDebug("Trading disabled and balance check not required - returning empty account summary");
+            return new Dictionary<string, decimal>();
+        }
+
+        // Retry logic with exponential backoff
+        int attempt = 0;
+        int delay = _tradingSettings.RetryDelaySeconds;
+
+        while (attempt < _tradingSettings.MaxRetries)
+        {
+            try
+            {
+                // Call GetAllAccountBalancesAsync through the interface
+                var accountBalances = await _exchangeClient.GetAllAccountBalancesAsync(cancellationToken);
+                _logger.LogInformation("Successfully retrieved account summary with {Count} account types", 
+                    accountBalances.Count);
+                return accountBalances;
+            }
+            catch (Exception ex)
+            {
+                attempt++;
+                
+                if (attempt >= _tradingSettings.MaxRetries)
+                {
+                    _logger.LogError(ex, "Failed to get account summary after {Attempts} attempts", attempt);
+                    
+                    // If balance check is required, throw the exception
+                    if (_tradingSettings.RequireBalanceCheck)
+                    {
+                        throw;
+                    }
+                    
+                    // Otherwise, return empty dictionary as fallback
+                    _logger.LogWarning("Returning empty account summary as fallback");
+                    return new Dictionary<string, decimal>();
+                }
+
+                _logger.LogWarning(ex, "Account summary request failed (attempt {Attempt}/{MaxAttempts}), retrying in {Delay}s", 
+                    attempt, _tradingSettings.MaxRetries, delay);
+                
+                await Task.Delay(TimeSpan.FromSeconds(delay), cancellationToken);
+                
+                // Exponential backoff
+                if (_tradingSettings.UseExponentialBackoff)
+                {
+                    delay *= 2;
+                }
+            }
+        }
+
+        // Safety fallback
+        _logger.LogWarning("Unexpected exit from retry loop for account summary, returning empty dictionary");
+        return new Dictionary<string, decimal>();
+    }
 }
