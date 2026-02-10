@@ -71,7 +71,9 @@ Configure your exchange credentials in `appsettings.json`:
 - **ApiKey/ApiSecret/Passphrase**: Obtain these from your Bitget account settings > API Management
   - For Bitget, the Passphrase is **required** (created when you generate the API key)
   - Make sure IP whitelist is either disabled or includes your server IP
-  - Enable appropriate permissions: Read for market-data-only, Read+Trade for trading
+  - Enable appropriate permissions: 
+    - **Read** permission: Required for market data and balance queries (including `/api/wallet/summary`)
+    - **Read+Trade** permission: Required for placing orders and active trading
 - **IsTestnet**: Set to `true` for testnet/sandbox, `false` for production trading
 - **AccountType**: Use `"spot"` for spot trading, `"futures"` for futures (futures support is limited in current version)
 
@@ -202,6 +204,12 @@ The worker will:
 
 - `GET /api/wallet/balances` - Get all wallet balances
 - `GET /api/wallet/balance/{asset}` - Get balance for specific asset
+- `GET /api/wallet/summary` - **[NEW]** Get account balance summary across all account types (Bitget V2 API)
+  - Uses the Bitget V2 `/api/v2/account/all-account-balance` endpoint
+  - Returns USDT-denominated balances for all account types (spot, futures, funding, earn, bots, margin, etc.)
+  - **Requires**: API key with "Read" permission for account access
+  - Response includes both a dynamic `accountBalances` dictionary and normalized fields (`spotUsdt`, `futuresUsdt`, etc.)
+  - Works in market-data-only mode (returns empty balances when credentials are not configured)
 
 ### Market Data
 
@@ -250,18 +258,21 @@ The worker will:
 - Identity authentication
 - Worker service skeleton
 - Configuration management
+- Bitget V2 all-account-balance wallet summary endpoint
 
 ### 🚧 TODO
 
 The following items need implementation when integrating with actual exchanges:
 
 **Bitget Integration** (marked with TODO comments):
-- Install and configure `Bitget.Net` NuGet package (when available/stable)
+- ✅ Bitget V2 account balance summary endpoint (implemented with signed REST API)
+- Install and configure `Bitget.Net` NuGet package (when available/stable) - **Using JK.Bitget.Net v3.5.0**
 - Implement REST API calls in `BitgetExchangeClient`:
-  - Connection testing
-  - Balance queries
-  - Order placement
+  - ✅ Connection testing
+  - ✅ Balance queries
+  - ✅ Order placement
   - Order cancellation
+  - ✅ All-account balance summary (Bitget V2 API with HMAC-SHA256 signing)
 - Implement WebSocket subscriptions in `BitgetMarketDataFeed`:
   - Kline/candlestick data streaming
   - Real-time event handling
