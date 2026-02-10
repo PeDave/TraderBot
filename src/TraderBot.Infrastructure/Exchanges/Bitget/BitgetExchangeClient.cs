@@ -23,8 +23,9 @@ public class BitgetExchangeClient : IExchangeClient
 {
     private readonly ILogger<BitgetExchangeClient> _logger;
     private readonly ExchangeSettings _settings;
-    private readonly BitgetRestClient _client;
+    private readonly BitgetRestClient? _client;
     private readonly HttpClient _httpClient;
+    private readonly bool _hasValidCredentials;
 
     public BitgetExchangeClient(
         ILogger<BitgetExchangeClient> logger,
@@ -35,14 +36,26 @@ public class BitgetExchangeClient : IExchangeClient
         _settings = settings;
         _httpClient = httpClient;
 
-        // Initialize Bitget REST client
-        _client = new BitgetRestClient(options =>
+        // Check if credentials are valid (not placeholder values)
+        _hasValidCredentials = !string.IsNullOrEmpty(_settings.ApiKey) && 
+            !string.IsNullOrEmpty(_settings.ApiSecret) &&
+            !string.IsNullOrEmpty(_settings.Passphrase) &&
+            !_settings.ApiKey.Contains("YOUR_") &&
+            !_settings.ApiSecret.Contains("YOUR_") &&
+            !_settings.Passphrase.Contains("YOUR_");
+
+        // Only initialize Bitget REST client if credentials are valid
+        if (_hasValidCredentials)
         {
-            if (!string.IsNullOrEmpty(_settings.ApiKey))
+            _client = new BitgetRestClient(options =>
             {
                 options.ApiCredentials = new ApiCredentials(_settings.ApiKey, _settings.ApiSecret, _settings.Passphrase);
-            }
-        });
+            });
+        }
+        else
+        {
+            _logger.LogWarning("Bitget client initialized without credentials. Only unauthenticated API calls will work.");
+        }
     }
 
     public ExchangeType ExchangeType => ExchangeType.Bitget;
@@ -50,6 +63,12 @@ public class BitgetExchangeClient : IExchangeClient
     public async Task<bool> TestConnectionAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Testing Bitget connection...");
+        
+        if (_client == null)
+        {
+            _logger.LogWarning("Cannot test connection: Bitget client not initialized (invalid credentials)");
+            return false;
+        }
         
         try
         {
@@ -75,6 +94,12 @@ public class BitgetExchangeClient : IExchangeClient
     public async Task<decimal> GetBalanceAsync(string asset, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Getting {AccountType} balance for asset: {Asset}", _settings.AccountType, asset);
+        
+        if (_client == null)
+        {
+            _logger.LogWarning("Cannot get balance: Bitget client not initialized (invalid credentials)");
+            return 0;
+        }
         
         try
         {
@@ -130,6 +155,12 @@ public class BitgetExchangeClient : IExchangeClient
         _logger.LogInformation(
             "Placing {Type} {Side} order for {Symbol}: Quantity={Quantity}, Price={Price}",
             type, side, symbol, quantity, price);
+        
+        if (_client == null)
+        {
+            _logger.LogError("Cannot place order: Bitget client not initialized (invalid credentials)");
+            throw new InvalidOperationException("Bitget client not initialized. Please configure valid API credentials.");
+        }
         
         try
         {
@@ -218,6 +249,13 @@ public class BitgetExchangeClient : IExchangeClient
     public async Task<Dictionary<string, decimal>> GetAllAccountBalancesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Getting all account balances from Bitget V2 API");
+        
+        // Check if credentials are configured
+        if (!_hasValidCredentials)
+        {
+            _logger.LogWarning("API credentials are not configured. Returning empty account balances.");
+            return new Dictionary<string, decimal>();
+        }
         
         try
         {
