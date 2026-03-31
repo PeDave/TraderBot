@@ -26,12 +26,21 @@ builder.Services.AddSingleton(exchangeSettings);
 builder.Services.AddSingleton(botSettings);
 builder.Services.AddSingleton(tradingSettings);
 
+// Register HttpClient for API calls
+builder.Services.AddHttpClient();
+
 // Register application services
 builder.Services.AddScoped<IMarketDataStore, EfMarketDataStore>();
 builder.Services.AddScoped<IPositionRepository, EfPositionRepository>();
 
 // Register exchange services (currently Bitget)
-builder.Services.AddSingleton<IExchangeClient, BitgetExchangeClient>();
+builder.Services.AddSingleton<IExchangeClient>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<BitgetExchangeClient>>();
+    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+    var httpClient = httpClientFactory.CreateClient();
+    return new BitgetExchangeClient(logger, exchangeSettings, httpClient);
+});
 builder.Services.AddSingleton<IMarketDataFeed, BitgetMarketDataFeed>();
 builder.Services.AddScoped<IWalletService, WalletService>();
 builder.Services.AddScoped<ITradeExecutor, TradeExecutor>();

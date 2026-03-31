@@ -7,4 +7,5 @@ public interface IWalletService
 {
     Task<decimal> GetAvailableBalanceAsync(string asset, CancellationToken cancellationToken = default);
     Task<Dictionary<string, decimal>> GetAllBalancesAsync(CancellationToken cancellationToken = default);
+    Task<Dictionary<string, decimal>> GetAccountSummaryAsync(CancellationToken cancellationToken = default);
 }
